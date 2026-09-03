@@ -96,6 +96,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="feed view: max text lines per message (default 3)")
         sp.add_argument("--links", action="store_true",
                         help="feed view: also show each message's permalink")
+        sp.add_argument("--quiet", "-Q", action="store_true",
+                        help="refresh the cache; print one summary line per account, no messages")
         sp.add_argument("--no-cache", action="store_true",
                         help="bypass the on-disk cache entirely")
         sp.add_argument("--no-fetch", action="store_true",
@@ -108,7 +110,53 @@ def build_parser() -> argparse.ArgumentParser:
     p_cache = sub.add_parser("cache", help="inspect or clear the message cache")
     p_cache.add_argument("--account", "-a", help="limit to this account")
     p_cache.add_argument("--clear", action="store_true", help="delete cached files")
+
+    p_skill = sub.add_parser(
+        "install-skill",
+        help="copy the 'unichat' Claude Code skill to ~/.claude/skills/",
+    )
+    p_skill.add_argument("--dest", help="target dir (default: ~/.claude/skills/unichat)")
+    p_skill.add_argument("--force", action="store_true", help="overwrite an existing install")
     return parser
+
+
+def _cmd_install_skill(args: argparse.Namespace) -> int:
+    import shutil
+    from importlib.resources import as_file, files
+
+    dest = (Path(args.dest).expanduser() if args.dest
+            else Path.home() / ".claude" / "skills" / "unichat")
+    if dest.exists() and not args.force:
+        console.print(f"[yellow]{dest} already exists — pass --force to overwrite[/yellow]")
+        return 1
+    with as_file(files("chat_interface") / "skill") as src:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.exists():
+            shutil.rmtree(dest)
+        shutil.copytree(src, dest)
+    console.print(f"installed the 'unichat' skill to {dest}")
+    return 0
+
+
+def _print_quiet_summary(messages) -> None:
+    """One line per account: message count, month span, unread count."""
+    from datetime import timezone
+
+    per: dict[str, list] = {}
+    for m in messages:
+        per.setdefault(m.account, []).append(m)
+    if not per:
+        console.print("[dim]no messages in range[/dim]")
+        return
+    for account in sorted(per):
+        msgs = per[account]
+        months = sorted({m.timestamp.astimezone(timezone.utc).strftime("%Y-%m") for m in msgs})
+        span = months[0] if len(months) == 1 else f"{months[0]}..{months[-1]}"
+        unread = sum(1 for m in msgs if m.is_unread)
+        console.print(
+            f"{account:<16} {len(msgs):>6} msgs  {span}"
+            + (f"  [yellow]{unread} unread[/yellow]" if unread else "")
+        )
 
 
 def _cmd_accounts(mgr: ChatManager) -> None:
@@ -376,6 +424,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command is None:
         _cmd_browse(args)
         return 0
+    if args.command == "install-skill":
+        return _cmd_install_skill(args)
 
     try:
         mgr = ChatManager.from_dir(args.accounts_dir)
@@ -407,6 +457,11 @@ def main(argv: list[str] | None = None) -> int:
                 offline=args.no_fetch,
                 progress=not args.no_fetch and sys.stderr.isatty(),
             )
+            if args.quiet:
+                _print_quiet_summary(messages)
+                for name, err in getattr(mgr, "errors", {}).items():
+                    console.print(f"[red]{name}:[/red] {err}")
+                return 0
             out_console = make_console(args.width)
             if args.feed:
                 print_feed(

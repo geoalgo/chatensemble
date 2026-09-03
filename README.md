@@ -84,10 +84,11 @@ text selection / copy still works.
 | switch account | `← →` / `1`–`9` |
 | move / scroll  | `↑ ↓` `j k`, `g` `G`, `PgUp`/`PgDn` |
 | open thread    | `⏎` |
+| find           | `f` — filter every loaded message by author/text (all terms must match); `⏎` on a hit jumps into its thread |
 | open in web browser | `o` — the message permalink (Mattermost / Slack) |
 | mark read      | `x` (this thread) · `X` (every thread in the tab) |
 | refetch        | `u` — pull fresh data and reload in place |
-| in a thread    | `[` `]` prev/next · `o` web · `x` read · `q` / `Esc` back |
+| in a thread    | `[` `]` prev/next · `o` web · `x` read · `f` find · `q` / `Esc` back |
 | quit           | `q` |
 
 Real data goes through the same cache-backed fetch as `fetch`/`unread` (current
@@ -135,6 +136,25 @@ with ChatManager.from_dir() as mgr:          # ~/unichat/accounts
   links collapse to their label, `@mentions` highlighted.
 - **Month-partitioned cache, on by default** — past months come from disk, the current
   month is always re-fetched (see below).
+
+### Ask Claude about your messages
+
+The cache is plain Parquet, so a coding agent can answer questions over it directly.
+`chat-interface install-skill` drops a Claude Code skill at `~/.claude/skills/unichat/`
+that teaches Claude the schema, a DuckDB query recipe, and how to handle unread
+state — so you can ask things like *"summarize the unread messages on WP4 in ufal"*,
+*"summarize all unread"*, or *"find where we discussed TRL — when did we pick the
+framework?"*.
+
+```sh
+uv run chat-interface install-skill               # -> ~/.claude/skills/unichat/
+uv run chat-interface fetch --since 30d --quiet   # refresh the cache; one line per account, no message dump
+```
+
+The skill queries `~/unichat/cache/*/*.parquet` with DuckDB (via `uv run --with
+duckdb`, no install needed), refreshes first with `fetch --quiet` when data may be
+stale, and excludes threads listed in `~/unichat/cache/_read_overlay.json` (the
+browser's manual mark-reads) when reporting what's unread.
 
 ## Caching
 
@@ -199,6 +219,8 @@ guilds would be viable — not implemented in this first cut.
 
 ## TODOs
 
+- **Reply** - support reply by hitting "r" and typing a message.
+- **UI** - better output when loading accounts for first time, show message in case of error. better output when scanning, show "Loading cache from ~/unichat/cache/" and "Fetching from channels [2/5]"
 - **Providers** — Discord (bot token, joined guilds only).
 - **Browser filter args** — the no-subcommand form only takes `--account` /
   `--days` / `--no-fetch`; wire up `--channel` / `--query` / `--mentions` too.
@@ -207,6 +229,17 @@ guilds would be viable — not implemented in this first cut.
 
 
 ## Done
+- **Ask-Claude via the cache** — `chat-interface install-skill` ships a Claude Code
+  skill (`~/.claude/skills/unichat/`) that queries the Parquet cache directly
+  (DuckDB over `~/unichat/cache/*/*.parquet`), with the schema, the
+  `_read_overlay.json` unread caveat, and worked examples. `fetch --quiet` gives it
+  a context-cheap way to refresh first (one line per account, no message table).
+  Chose raw-cache + skill over `--json` / an MCP server for now — zero new deps,
+  Claude is strong at SQL; MCP stays a later option if Desktop / claude.ai matters.
+- **Find (`f`)** — filters every loaded message (across all accounts) whose
+  author + text contains all whitespace-separated query terms; live as you type,
+  newest first, capped at 1000. `⏎` on a hit switches to that message's account
+  tab, opens its thread, scrolls to the message and flags it `<- found`.
 - **Browser is the default command** — bare `chat-interface` fetches the real
   accounts and opens the thread browser (`_cmd_browse`); `--synthetic` swaps in
   generated data, `--no-fetch` reads straight from the cache. (The old `demo`

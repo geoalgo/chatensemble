@@ -7,8 +7,10 @@ from datetime import datetime, timezone
 from chat_interface.cache import MonthStore, month_key
 from chat_interface.cli import (
     _apply_read_overlay,
+    _cmd_install_skill,
     _load_read_overlay,
     _persist_read,
+    _print_quiet_summary,
     _read_cache_direct,
     _save_read_overlay,
     _server_mark_read,
@@ -160,3 +162,37 @@ def test_manager_fetch_runs_accounts_in_parallel_and_isolates_errors():
     assert elapsed < 0.8                      # concurrent, not 3 x 0.3s serial
     assert {m.account for m in msgs} == {"a", "b"}   # "c" failed, others fine
     assert list(mgr.errors) == ["c"] and mgr.errors["c"] == "boom"
+
+
+def test_quiet_summary_one_line_per_account(capsys):
+    from chat_interface.models import ChannelKind, Message
+
+    def _m(acct, day, unread):
+        return Message(id=f"{acct}{day}", text="x",
+                       timestamp=datetime(2026, 8, day, tzinfo=UTC),
+                       author_id="u", author_name="u", channel_id="c", channel_name="c",
+                       channel_kind=ChannelKind.PUBLIC, account=acct, is_unread=unread)
+
+    _print_quiet_summary([_m("ufal", 1, True), _m("ufal", 2, False), _m("aa", 3, False)])
+    out = capsys.readouterr().out
+    rows = [r for r in out.splitlines() if r.strip()]
+    assert len(rows) == 2                               # one per account
+    assert any(r.startswith("ufal") and "2 msgs" in r and "1 unread" in r for r in rows)
+    assert any(r.startswith("aa") and "1 msgs" in r and "unread" not in r for r in rows)
+
+    _print_quiet_summary([])
+    assert "no messages" in capsys.readouterr().out
+
+
+def test_install_skill_copies_packaged_skill(tmp_path):
+    import argparse
+
+    dest = tmp_path / "unichat"
+    assert _cmd_install_skill(argparse.Namespace(dest=str(dest), force=False)) == 0
+    skill = (dest / "SKILL.md").read_text()
+    assert skill.startswith("---\nname: unichat")
+    assert "~/unichat/cache" in skill and "_read_overlay.json" in skill
+
+    # refuses without --force, then overwrites with it
+    assert _cmd_install_skill(argparse.Namespace(dest=str(dest), force=False)) == 1
+    assert _cmd_install_skill(argparse.Namespace(dest=str(dest), force=True)) == 0

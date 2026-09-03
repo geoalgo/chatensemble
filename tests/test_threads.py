@@ -275,6 +275,63 @@ def test_browser_refetch_failure_keeps_current_view():
     assert b3._status == "no live account to fetch"
 
 
+def test_browser_find_filters_and_jumps_to_message():
+    msgs = synthetic_messages(("helmholtz", "opengpt-x"), seed=1, threads_per_account=10)
+    b = ThreadBrowser(msgs, console=_console())
+
+    b.handle("f")
+    assert b.view == "find" and b._find_editing
+    for ch in "klaus":                              # matches "Klaus Bergmann" (helmholtz)
+        b.handle(ch)
+    assert b._find_q == "klaus"
+    assert b._find_results
+    assert all("klaus" in f"{m.author_name}\n{m.text}".lower() for m in b._find_results)
+    # newest first
+    ts = [m.timestamp for m in b._find_results]
+    assert ts == sorted(ts, reverse=True)
+
+    # multi-term is AND
+    for ch in " zzzznope":
+        b.handle(ch)
+    assert b._find_results == []
+    for _ in range(9):                              # backspace " zzzznope"
+        b.handle("BACKSPACE")
+    assert b._find_q == "klaus" and b._find_results
+
+    b.handle("ENTER")                               # freeze -> results nav
+    assert not b._find_editing
+    b.handle("j")
+    b._clamp_find()
+    target = b._find_results[b._find_sel]
+
+    b.handle("ENTER")                               # open the message's thread
+    assert b.view == "thread"
+    assert b.current.id == (target.thread_id or target.id)
+    assert b.current.account == target.account
+    assert b._thread_mark == (target.thread_id or target.id, target.id)
+    assert any("<- found" in "".join(s.text for s in ln)
+               for ln in b.console.render_lines(b.render(),
+                                                b.console.options.update(height=None), pad=False))
+
+    b.handle("q")                                   # leave thread -> mark cleared
+    assert b.view == "list" and b._thread_mark is None
+
+    b.handle("f")                                   # re-open find, query resumes
+    assert b.view == "find" and b._find_q == "klaus"
+    b.handle("ESC")
+    assert b.view == "list"
+
+
+def test_browser_find_q_key_is_literal_while_typing():
+    b = ThreadBrowser(synthetic_messages(("x",), seed=1, threads_per_account=3),
+                      console=_console())
+    b.handle("f")
+    for ch in "q u i t":                            # 'q' must not quit mid-query
+        b.handle(ch)
+    assert b._find_q == "q u i t"
+    assert b.handle("CTRL-C") is False              # ctrl-c still quits
+
+
 def test_browser_starts_at_top_and_fits_screen():
     msgs = synthetic_messages(("x", "y", "z"), seed=4, threads_per_account=12)
     con = Console(width=120, height=30)

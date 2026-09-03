@@ -6,7 +6,8 @@ full conversation with its own scroll.
 
 Keyboard only (so terminal text selection / copy-paste keeps working):
   left/right or 1-9  switch account · up/down or j/k  move · enter  open thread
-  o  open the permalink in a web browser · x / X  mark read · u  refetch · q  quit
+  f  find messages by author/text · o  open the permalink in a web browser
+  x / X  mark read · u  refetch · q  quit
 
 Falls back to a plain per-account feed when stdin/stdout is not a real terminal.
 """
@@ -34,6 +35,7 @@ from .threads import Thread, group_threads
 
 _CARD_H = 3          # fixed lines per thread card
 _SNIPPET_MAX = 200   # hard cap on the preview length, before the terminal width
+_FIND_MAX = 1000     # cap on "f" search results
 
 # Everything drawn as "chrome" is ASCII-only. Non-ASCII markers (★ ● ▸ 👥 ─)
 # are East-Asian *ambiguous / wide*: many terminals render them 2 cells wide
@@ -65,6 +67,12 @@ def _ascii_safe(s: str) -> str:
 def _truncate(text: str, n: int) -> str:
     text = text.strip()
     return text if len(text) <= n else text[: max(1, n - 3)].rstrip() + "..."
+
+
+def _highlight_terms(text: Text, query: str, style: str = "black on yellow") -> None:
+    for term in query.split():
+        if term:
+            text.highlight_words([term], style, case_sensitive=False)
 
 
 def _reaction_line(reactions: dict[str, int]) -> str:
@@ -214,9 +222,17 @@ class ThreadBrowser:
         self.tab_idx = 0
         self.sel = 0
         self.offset = 0
-        self.view = "list"           # or "thread"
+        self.view = "list"           # "list" | "thread" | "find"
         self.scroll = 0
         self._status = ""            # transient one-line note in the help bar
+        self._scroll_to: str | None = None            # msg id to scroll the thread to
+        self._thread_mark: tuple[str, str] | None = None  # (thread id, msg id) to flag
+        # find ("f"): query editing + a flat list of matching messages
+        self._find_q = ""
+        self._find_editing = False
+        self._find_results: list[Message] = []
+        self._find_sel = 0
+        self._find_offset = 0
         self._load(messages)
         self._clamp_list()
 
@@ -280,6 +296,16 @@ class ThreadBrowser:
         self.tab_idx = max(0, min(idx, len(self.tab_names) - 1))
         self.sel = self.offset = 0
 
+    def _clamp_find(self) -> None:
+        n = len(self._find_results)
+        self._find_sel = 0 if n == 0 else max(0, min(self._find_sel, n - 1))
+        vis = self._visible_cards()
+        if self._find_sel < self._find_offset:
+            self._find_offset = self._find_sel
+        elif self._find_sel >= self._find_offset + vis:
+            self._find_offset = self._find_sel - vis + 1
+        self._find_offset = max(0, min(self._find_offset, max(0, n - vis)))
+
     # -- mark read --------------------------------------------------- #
     def _mark_read(self, threads: "Thread | list[Thread] | None") -> None:
         """Clear the unread flag on one or more threads (client-side, optimistic).
@@ -322,8 +348,93 @@ class ThreadBrowser:
         self._load(messages, keep_position=True)
         if self.view == "thread" and self.current is None:
             self.view = "list"
+        if self.view == "find":                 # stale message refs -> drop back
+            self.view = "list"
+            self._find_results = []
         self._clamp_list()
         self._status = "refreshed"
+
+    # -- find ("f") ----------------------------------------------------- #
+    def _start_find(self) -> None:
+        self.view = "find"
+        self._find_editing = True
+        self._run_find()
+
+    def _run_find(self) -> None:
+        """(Re)compute matching messages from the current query (live)."""
+        terms = self._find_q.lower().split()
+        hits: list[Message] = []
+        if terms:
+            for t in self.tab_threads[1]:       # the "All" tab == every loaded thread
+                for m in t.messages:
+                    hay = f"{m.author_name}\n{_clean(m.text)}".lower()
+                    if all(term in hay for term in terms):
+                        hits.append(m)
+            hits.sort(key=lambda m: m.timestamp, reverse=True)
+            del hits[_FIND_MAX:]
+        self._find_results = hits
+        self._find_sel = self._find_offset = 0
+
+    def _handle_find_edit(self, ev) -> None:
+        if ev == "ENTER":
+            self._find_editing = False         # freeze; results are already live
+        elif ev == "ESC":
+            self.view = "list"
+            self._find_editing = False
+        elif ev == "BACKSPACE":
+            self._find_q = self._find_q[:-1]
+            self._run_find()
+        elif isinstance(ev, str) and len(ev) == 1 and ev.isprintable():
+            self._find_q += ev
+            self._run_find()
+
+    def _handle_find(self, ev) -> None:
+        page = self._visible_cards()
+        n = len(self._find_results)
+        if ev in ("ESC", "q", "LEFT", "h", "BACKSPACE"):
+            self.view = "list"
+        elif ev in ("f", "/"):
+            self._find_editing = True
+        elif ev in ("DOWN", "j"):
+            self._find_sel += 1
+        elif ev in ("UP", "k"):
+            self._find_sel -= 1
+        elif ev in ("PGDN", " "):
+            self._find_sel += page
+        elif ev == "PGUP":
+            self._find_sel -= page
+        elif ev in ("HOME", "g"):
+            self._find_sel = 0
+        elif ev in ("END", "G"):
+            self._find_sel = n - 1
+        elif ev in ("ENTER", "RIGHT", "l"):
+            self._open_find_result()
+        elif ev == "o":
+            self._open_web_msg(self._find_results[self._find_sel] if n else None)
+
+    def _open_find_result(self) -> None:
+        if not self._find_results:
+            return
+        m = self._find_results[self._find_sel]
+        tid = m.thread_id or m.id
+        # jump to the account's own tab first (thread is guaranteed present there)
+        self.tab_idx = next(
+            (i for i, name in enumerate(self.tab_names) if name == m.account), 1
+        )
+        hit = next((i for i, t in enumerate(self.threads)
+                    if t.id == tid and t.account == m.account), None)
+        if hit is None:                          # fall back to "All"
+            self.tab_idx = 1
+            hit = next((i for i, t in enumerate(self.threads) if t.id == tid), None)
+        if hit is None:
+            self.view = "list"
+            self._status = "that message's thread is not loaded"
+            return
+        self.sel = hit
+        self.scroll = 0
+        self._scroll_to = m.id
+        self._thread_mark = (tid, m.id)
+        self.view = "thread"
 
     # -- rendering (ASCII-only chrome; see _ascii_safe) --------------- #
     def _width(self) -> int:
@@ -408,7 +519,8 @@ class ThreadBrowser:
     def _help_line(self) -> Text:
         n = len(self.threads)
         pos = f"{self.sel + 1}/{n}" if n else "0/0"
-        keys = "[<-/->] account   [j k] move   [enter] open   [o] web   [x] read   [q] quit"
+        keys = ("[<-/->] account   [j k] move   [enter] open   "
+                "[f] find   [o] web   [x] read   [q] quit")
         if self._on_refetch is not None:
             keys = keys.replace("[q] quit", "[u] fetch   [q] quit")
         tail = f"[ {self._status} ]" if self._status else keys
@@ -416,6 +528,59 @@ class ThreadBrowser:
             f" {_ascii_safe(self.tab_names[self.tab_idx])}  -  {pos}   {tail}",
             style="dim",
         ))
+
+    def _result_card(self, m: Message, *, selected: bool, width: int) -> Table:
+        """One search hit: author + channel + account + time, then a text preview."""
+        g = Table.grid(padding=0)
+        g.add_column(width=width, no_wrap=True, overflow="ellipsis")
+        now = datetime.now(timezone.utc)
+
+        head = self._fit(Text("  "))
+        head.append(_ascii_safe(m.author_name) or "(unknown)", style="bold")
+        head.append(f"  {_ascii_safe(_clean(m.channel_name))} ", style="grey74 on grey23")
+        head.append(f"  {_relative_time(m.timestamp, now)}", style="dim")
+        head.append(f"  {_ascii_safe(m.account)}", style="dim")
+
+        limit = min(_SNIPPET_MAX, max(20, width - 2))
+        body = self._fit(Text(_truncate(_ascii_safe(_clean(m.text)) or "(no text)", limit)))
+        if selected:
+            head.stylize("reverse")
+            body.stylize("reverse")
+        _highlight_terms(head, self._find_q)      # after reverse -> matches stay visible
+        _highlight_terms(body, self._find_q)
+
+        g.add_row(head)
+        g.add_row(body)
+        g.add_row(Text(""))
+        return g
+
+    def _find_view(self) -> Group:
+        width = self._width()
+        n = len(self._find_results)
+        caret = "_" if self._find_editing else ""
+        header = self._fit(Text(
+            f" find  {_ascii_safe(self._find_q)}{caret}   "
+            f"-  {n} match{'' if n == 1 else 'es'}"
+            + (f" (showing {_FIND_MAX})" if n == _FIND_MAX else ""),
+            style="bold",
+        ))
+        parts: list = [header, Text("-" * width, style="grey37")]
+        if not n:
+            hint = ("start typing to match author + text" if not self._find_q
+                    else "no matches")
+            parts.append(Text(f"  {hint}", style="dim"))
+        else:
+            vis = self._visible_cards()
+            for i, m in enumerate(self._find_results[self._find_offset:self._find_offset + vis],
+                                  start=self._find_offset):
+                parts.append(self._result_card(m, selected=(i == self._find_sel), width=width))
+
+        pos = f"{self._find_sel + 1}/{n}" if n else "0/0"
+        keys = ("[type] filter   [enter] done   [esc] cancel" if self._find_editing
+                else "[j k] move   [enter] open thread   [f] edit   [o] web   [q] back")
+        tail = f"[ {self._status} ]" if self._status else keys
+        parts.append(self._fit(Text(f" {pos}   {tail}", style="dim")))
+        return Group(*parts)
 
     def _thread_view(self) -> Group:
         t = self.current
@@ -425,9 +590,17 @@ class ThreadBrowser:
         head.append(f"{_ascii_safe(t.account)}  /  ", style="dim")
         head.append(_ascii_safe(_clean(t.channel_name)), style="grey74")
 
-        body = Group(*self._thread_lines(t))
         opts = self.console.options.update(width=width, height=None)
-        lines = self.console.render_lines(body, opts, pad=False)
+        lines: list = []
+        offsets: dict[str, int] = {}
+        for mid, rends in self._thread_blocks(t):
+            offsets[mid] = len(lines)
+            for r in rends:
+                lines.extend(self.console.render_lines(r, opts, pad=False))
+
+        if self._scroll_to is not None:                 # arrived here from "find"
+            self.scroll = offsets.get(self._scroll_to, self.scroll)
+            self._scroll_to = None
 
         viewport = max(1, self.console.size.height - 3)
         self.scroll = max(0, min(self.scroll, max(0, len(lines) - viewport)))
@@ -438,19 +611,22 @@ class ThreadBrowser:
             segs.append(Segment("\n"))
 
         last = self.scroll + len(shown)
-        keys = "[j k] scroll   [ [  ] ] prev/next   [o] web   [x] read   [q] back"
+        keys = "[j k] scroll   [ [  ] ] prev/next   [o] web   [x] read   [f] find   [q] back"
         tail = f"[ {self._status} ]" if self._status else keys
         foot = self._fit(Text(
             f" lines {self.scroll + 1}-{last}/{len(lines)}   {tail}", style="dim",
         ))
         return Group(head, Text("-" * width, style="grey37"), Segments(segs), foot)
 
-    def _thread_lines(self, t: Thread) -> list:
+    def _thread_blocks(self, t: Thread) -> list[tuple[str, list]]:
+        """``[(msg id, [renderables]), ...]`` -- grouped so the thread view can
+        map a message id to a scroll offset (for "find" jump-to)."""
         now = datetime.now(timezone.utc)
-        out: list = []
+        mark = (self._thread_mark[1]
+                if self._thread_mark and self._thread_mark[0] == t.id else None)
+        out: list[tuple[str, list]] = []
         for i, m in enumerate(t.messages):
-            if i:
-                out.append(Text(""))
+            rends: list = [] if not i else [Text("")]
             hdr = Text()
             if m.is_mention:
                 hdr.append(_MARK_MENTION, style="bold red")
@@ -460,20 +636,29 @@ class ThreadBrowser:
                 hdr.append("   you", style="dim italic")
             if i == 0:
                 hdr.append("   - thread start", style="dim")
-            out.append(hdr)
+            if m.id == mark:
+                hdr.append("   <- found", style="bold yellow")
+            rends.append(hdr)
             para = Text(_ascii_safe(_clean(m.text)) or "(no text)", no_wrap=False)
             para.highlight_regex(r"@[\w][\w.\-]*", "cyan")
             para.highlight_regex(r"@(?:channel|here|all|everyone)\b", "bold cyan")
             if m.is_own:
                 para.stylize("italic dim")
-            out.append(para)
+            if m.id == mark:
+                _highlight_terms(para, self._find_q)
+            rends.append(para)
             if m.reactions:
                 # real emoji here on purpose -- NOT run through _ascii_safe
-                out.append(Text(_reaction_line(m.reactions), style="dim"))
+                rends.append(Text(_reaction_line(m.reactions), style="dim"))
+            out.append((m.id, rends))
         return out
 
     def render(self):
-        return self._thread_view() if self.view == "thread" else self._list_view()
+        if self.view == "find":
+            return self._find_view()
+        if self.view == "thread":
+            return self._thread_view()
+        return self._list_view()
 
     # -- input handling --------------------------------------------- #
     def _open(self) -> None:
@@ -484,9 +669,14 @@ class ThreadBrowser:
     def _open_web(self) -> None:
         """Open the selected thread's permalink in the system web browser."""
         t = self.current
-        url = t.root.permalink if t else None
+        self._open_web_url(t.root.permalink if t else None)
+
+    def _open_web_msg(self, m: Message | None) -> None:
+        self._open_web_url(m.permalink if m else None)
+
+    def _open_web_url(self, url: str | None) -> None:
         if not url:
-            self._status = "no web link for this thread"
+            self._status = "no web link here"
             return
         try:
             opened = webbrowser.open(url, new=2)
@@ -498,19 +688,35 @@ class ThreadBrowser:
     def handle(self, ev) -> bool:
         """Return False to quit."""
         self._status = ""            # any keypress clears the transient note
+
+        if self.view == "find":      # find swallows keys (incl. "q", while typing)
+            if ev == "CTRL-C":
+                return False
+            if self._find_editing:
+                self._handle_find_edit(ev)
+            else:
+                self._handle_find(ev)
+            return True
+
         if ev in ("CTRL-C", "q"):
             if self.view == "thread":
                 self.view = "list"
+                self._thread_mark = None
                 return True
             return False
         if ev == "u":
             self._refetch()
+            return True
+        if ev == "f":
+            self._start_find()
             return True
 
         if self.view == "list":
             self._handle_list(ev)
         else:
             self._handle_thread(ev)
+            if self.view == "list":          # left the thread -> drop its mark
+                self._thread_mark = None
         return True
 
     def _handle_list(self, ev) -> None:
@@ -611,6 +817,7 @@ class ThreadBrowser:
                 if not self.handle(ev):
                     break
                 self._clamp_list()
+                self._clamp_find()
                 self._paint()
 
     def _dump(self) -> None:
