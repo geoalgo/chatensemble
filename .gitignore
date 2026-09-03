@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Never commit real credentials (accounts now live in ~/unichat/accounts/)
+/accounts.txt
+/accounts/
+.cache/
