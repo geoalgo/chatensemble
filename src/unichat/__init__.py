@@ -1,4 +1,4 @@
-"""chat-interface: unified fetch/visualise for Mattermost, Slack, Discord."""
+"""unichat: unified fetch/visualise for Mattermost, Slack, Discord."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from .browser import ThreadBrowser, browse_threads
 from .filters import FetchFilter, parse_when
 from .manager import ChatManager
 from .models import Channel, ChannelKind, Message
-from .progress import CallbackReporter, Reporter, TqdmReporter
+from .progress import CallbackReporter, ChannelProgressReporter, Reporter, TqdmReporter
 from .providers import create_client
 from .synthetic import DEFAULT_ACCOUNTS, PERSONAS, synthetic_messages
 from .threads import Thread, group_threads
@@ -43,6 +43,7 @@ __all__ = [
     "Reporter",
     "TqdmReporter",
     "CallbackReporter",
+    "ChannelProgressReporter",
     "print_messages",
     "print_feed",
     "print_channels",

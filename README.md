@@ -1,76 +1,83 @@
-# chat-interface
+# unichat
 
 Fetch, browse and visualise chat messages from **Mattermost**, **Slack**, and
-(later) **Discord** through one API and one CLI. Run `chat-interface` with no
+(later) **Discord** through one API and one CLI. Run `unichat` with no
 subcommand for an interactive, multi-account thread browser.
 
-## Usage
-
-### Install
+## Install
 
 ```sh
 uv sync --extra dev
 ```
 
-### Add an account
+## Adding accounts / authentication
 
-One YAML file per account in `~/unichat/accounts/` (outside any code checkout;
-override per-run with `--accounts-dir`). The name defaults to the filename; the
-`type` is taken from `type:` or inferred from the filename / token prefix. Any
-value may use `${VAR}` / `$VAR`, expanded from the environment.
+One YAML file per account in `~/unichat/accounts/` (git-ignored; override with
+`--accounts-dir`). Name = filename; `type` from `type:` or the filename / token
+prefix. Values expand `${VAR}` / `$VAR` from the environment. `unichat accounts`
+lists what's configured.
 
-`~/unichat/accounts/work.yaml`
+**Mattermost** — `~/unichat/accounts/work.yaml`
 
 ```yaml
 type: mattermost
 server: https://mattermost.example.com
 username: you@example.com
-password: ${MM_PASSWORD}        # or:  token: <personal access token>
-verify_ssl: true
-# teams: [engineering]         # optional allow-list, default = all
+password: ${MM_PASSWORD}     # or:  token: <personal access token>
+# teams: [engineering]       # optional allow-list (default: all)
 ```
 
-`~/unichat/accounts/slack.yaml`
+**Slack, app token** — `~/unichat/accounts/slack.yaml`
 
 ```yaml
 type: slack
-token: ${SLACK_TOKEN}          # app user token (xoxp-/xoxb-)
+token: ${SLACK_TOKEN}        # xoxp- / xoxb-
 ```
 
-Slack has no username/password login. To use your own session instead of a Slack
-app, take a browser token + cookie (DevTools → Network → any `/api/…` request):
+**Slack, no app** — reuse your own browser session (`xoxc-` token + the `xoxd-`
+`d` cookie). Pull both from Firefox automatically:
+
+```sh
+uv run unichat import-slack --list              # signed-in workspaces (no secrets)
+uv run unichat import-slack -w ellis -a ellis   # -> ~/unichat/accounts/ellis.yaml
+```
+
+Needs `uv sync --extra slack-cookie` if Slack's stored config is compressed. By
+hand instead: DevTools → Network → any `/api/…` call →
 
 ```yaml
 type: slack
-token: ${SLACK_XOXC}           # the request's "token" form field  (xoxc-…)
-cookie: ${SLACK_XOXD}          # that request's "d" cookie value    (xoxd-…)
+token: ${SLACK_XOXC}         # request's "token" form field
+cookie: ${SLACK_XOXD}        # request's "d" cookie
 ```
+
+## Usage
 
 ### Show messages
 
 ```sh
-uv run chat-interface accounts                       # list configured accounts
-uv run chat-interface channels --account work        # channels + unread counts
+uv run unichat accounts                       # list configured accounts
+uv run unichat channels --account work        # channels + unread counts
 
-uv run chat-interface unread                         # unread, dense table
-uv run chat-interface unread --feed                  # unread, feed of cards
-uv run chat-interface fetch --since 7d --channel 'eng-*' --query 'deploy|incident'
-uv run chat-interface fetch --since 3d --feed --lines 2 --width 90
+uv run unichat unread                         # unread, dense table
+uv run unichat unread --feed                  # unread, feed of cards
+uv run unichat fetch --since 7d --channel 'eng-*' --query 'deploy|incident'
+uv run unichat fetch --since 3d --feed --lines 2 --width 90
 
-uv run chat-interface fetch --backfill               # pull all history (see Caching)
-uv run chat-interface cache                          # show what's cached
+uv run unichat fetch --backfill               # pull all history (see Caching)
+uv run unichat cache                          # show what's cached
 ```
 
 ### Browse threads
 
-With **no subcommand**, `chat-interface` fetches your real accounts and opens an
+With **no subcommand**, `unichat` fetches your real accounts and opens an
 interactive, `rich`-drawn thread browser:
 
 ```sh
-uv run chat-interface                                # fetch (last 21 days), then browse
-uv run chat-interface --days 30 --account work       # narrower window / one account
-uv run chat-interface --no-fetch                     # straight from the cache, no network
-uv run chat-interface --synthetic                    # generated demo data instead
+uv run unichat                                # fetch (last 21 days), then browse
+uv run unichat --days 30 --account work       # narrower window / one account
+uv run unichat --no-fetch                     # straight from the cache, no network
+uv run unichat --synthetic                    # generated demo data instead
 ```
 
 A **tab bar** picks the account — `Unread` (first tab) aggregates every unread
@@ -94,7 +101,7 @@ text selection / copy still works.
 Real data goes through the same cache-backed fetch as `fetch`/`unread` (current
 month refreshed, `is_unread` from the live read marker), falling back to the
 on-disk cache for any account whose fetch fails or that has no config.
-`--synthetic` uses `chat_interface.synthetic.synthetic_messages()` — deterministic
+`--synthetic` uses `unichat.synthetic.synthetic_messages()` — deterministic
 per `--seed`, one *persona* per account (`helmholtz`, `opengpt-x`, `trove-ai`,
 each with its own people, channels and topics).
 
@@ -104,13 +111,13 @@ each with its own people, channels and topics).
 the server (and synthetic data is regenerated). Real mode *also* writes through to
 the cache parquet and best-effort advances the server marker (Mattermost
 `.../channels/members/me/view`, Slack `conversations.mark`). Clear the overlay
-with `chat-interface cache --clear`. Piping the output (no TTY) prints a
+with `unichat cache --clear`. Piping the output (no TTY) prints a
 per-account feed instead.
 
 From Python:
 
 ```python
-from chat_interface import ChatManager, FetchFilter, print_feed
+from unichat import ChatManager, FetchFilter, print_feed
 
 with ChatManager.from_dir() as mgr:          # ~/unichat/accounts
     msgs = mgr.fetch(FetchFilter(since="7d", unread_only=True))
@@ -140,15 +147,15 @@ with ChatManager.from_dir() as mgr:          # ~/unichat/accounts
 ### Ask Claude about your messages
 
 The cache is plain Parquet, so a coding agent can answer questions over it directly.
-`chat-interface install-skill` drops a Claude Code skill at `~/.claude/skills/unichat/`
+`unichat install-skill` drops a Claude Code skill at `~/.claude/skills/unichat/`
 that teaches Claude the schema, a DuckDB query recipe, and how to handle unread
 state — so you can ask things like *"summarize the unread messages on WP4 in ufal"*,
 *"summarize all unread"*, or *"find where we discussed TRL — when did we pick the
 framework?"*.
 
 ```sh
-uv run chat-interface install-skill               # -> ~/.claude/skills/unichat/
-uv run chat-interface fetch --since 30d --quiet   # refresh the cache; one line per account, no message dump
+uv run unichat install-skill               # -> ~/.claude/skills/unichat/
+uv run unichat fetch --since 30d --quiet   # refresh the cache; one line per account, no message dump
 ```
 
 The skill queries `~/unichat/cache/*/*.parquet` with DuckDB (via `uv run --with
@@ -180,12 +187,14 @@ calendar month (UTC):
   **`--no-fetch` serves only from cache with no network at all** (offline; `is_unread`
   keeps its stored value).
 - `unread` defaults to `--since 90d` to keep the scan bounded.
-- `chat-interface cache` shows coverage; `chat-interface cache --clear [-a <account>]`
+- `unichat cache` shows coverage; `unichat cache --clear [-a <account>]`
   deletes it (a bare `--clear` also drops the browser's `_read_overlay.json`).
 
-Long fetches show a `tqdm` bar per live month (`ufal 2026-07: 73%|███ | 117/160 [.., 22
-ch/s, <channel>]`), one row per account. From Python: `mgr.fetch(flt, progress=True)`,
-or pass a `Reporter` / `callable(str)`.
+`fetch` / `unread` show a `tqdm` bar per live month (`ufal 2026-07: 73%|███ | 117/160`),
+one row per account. The thread browser (startup and `u`) shows a single live
+`Fetching from channels [2/5]` line instead. From Python: `mgr.fetch(flt,
+progress=True)` for the bars, or pass a `Reporter` — `ChannelProgressReporter(sink)`
+for the `[done/total]` line, or a `callable(str)`.
 
 Providers only expose `list_channels()` and `messages_between(start, end, channels)`;
 all the per-backend awkwardness (Mattermost has no server-side upper bound, Slack uses
@@ -220,16 +229,17 @@ guilds would be viable — not implemented in this first cut.
 ## TODOs
 
 - **Reply** - support reply by hitting "r" and typing a message.
-- **UI** - better output when loading accounts for first time, show message in case of error. better output when scanning, show "Loading cache from ~/unichat/cache/" and "Fetching from channels [2/5]"
-- **Providers** — Discord (bot token, joined guilds only).
-- **Browser filter args** — the no-subcommand form only takes `--account` /
-  `--days` / `--no-fetch`; wire up `--channel` / `--query` / `--mentions` too.
-- **Thread-level read markers** — Mattermost `/channels/members/me/view` is
-  channel-scoped; use the collapsed-reply-thread endpoints when the server has CRT.
+- **UI** - better output when loading accounts for first time, show message in case of error. Show "Loading cache from ~/unichat/cache/" when serving from disk. (Scan progress is done: `Fetching from channels [2/5]`, live, on startup and on `u`.)
+- **Providers** — Discord (bot token, joined guilds only). Teams.
 
 
 ## Done
-- **Ask-Claude via the cache** — `chat-interface install-skill` ships a Claude Code
+- **`import-slack`** — pulls the Slack web token (`xoxc-`) + `d` cookie (`xoxd-`)
+  from a local Firefox profile into `~/unichat/accounts/<name>.yaml`; `--list`
+  shows signed-in workspaces, `--workspace` picks one. Logic moved from the old
+  `scripts/ff_slack_creds.py` into `unichat.slack_cookie` behind the subcommand;
+  `cramjam` (for Slack's compressed config blob) is the `slack-cookie` extra.
+- **Ask-Claude via the cache** — `unichat install-skill` ships a Claude Code
   skill (`~/.claude/skills/unichat/`) that queries the Parquet cache directly
   (DuckDB over `~/unichat/cache/*/*.parquet`), with the schema, the
   `_read_overlay.json` unread caveat, and worked examples. `fetch --quiet` gives it
@@ -240,7 +250,7 @@ guilds would be viable — not implemented in this first cut.
   author + text contains all whitespace-separated query terms; live as you type,
   newest first, capped at 1000. `⏎` on a hit switches to that message's account
   tab, opens its thread, scrolls to the message and flags it `<- found`.
-- **Browser is the default command** — bare `chat-interface` fetches the real
+- **Browser is the default command** — bare `unichat` fetches the real
   accounts and opens the thread browser (`_cmd_browse`); `--synthetic` swaps in
   generated data, `--no-fetch` reads straight from the cache. (The old `demo`
   subcommand is gone.)
@@ -266,7 +276,7 @@ guilds would be viable — not implemented in this first cut.
   best-effort advances the server marker via `ChatManager.mark_read` → provider
   `mark_read` (Mattermost `POST /channels/members/me/view` — channel-scoped;
   Slack `conversations.mark` with the thread's last-activity ts). Clear the
-  overlay with `chat-interface cache --clear`.
+  overlay with `unichat cache --clear`.
 - **List unread only** — the thread browser's first tab, `Unread`, aggregates every
   unread thread across all accounts; the browser opens on it when it's non-empty.
 - **Synthetic personas** — `--synthetic` generates `helmholtz` / `opengpt-x` /

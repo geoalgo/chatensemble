@@ -7,7 +7,7 @@ Providers implement exactly two data operations:
   half-open ``[start, end)`` time window.
 
 Everything provider-specific (pagination, rate limits, a missing server-side upper
-bound, cursor resume) lives behind those. :class:`~chat_interface.filters.FetchFilter`
+bound, cursor resume) lives behind those. :class:`~unichat.filters.FetchFilter`
 never reaches a provider.
 """
 

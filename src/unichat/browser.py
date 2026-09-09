@@ -175,6 +175,16 @@ class _Input:
 
 _MOUSE_OFF = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1004l"
 
+# The interactive UI needs a POSIX terminal (raw mode via termios/tty, stdin
+# select). Absent that -- native Windows -- callers fall back to the feed dump.
+try:
+    import termios as _termios  # noqa: F401
+    import tty as _tty          # noqa: F401
+
+    RAW_TERMINAL_SUPPORTED = True
+except ImportError:             # pragma: no cover - Windows
+    RAW_TERMINAL_SUPPORTED = False
+
 
 @contextmanager
 def _raw_terminal(console: Console):
@@ -210,13 +220,13 @@ class ThreadBrowser:
         *,
         console: Console | None = None,
         on_read: Callable[[Thread], None] | None = None,
-        on_refetch: Callable[[], list[Message]] | None = None,
+        on_refetch: "Callable[[Callable[[str], None]], list[Message]] | None" = None,
     ) -> None:
         self.console = console or Console()
         # called once per thread when the user marks it read; a caller can use it
         # to push the read marker to the server and/or the on-disk cache.
         self._on_read = on_read
-        # called when the user hits "u": returns a fresh message list to reload.
+        # called when the user hits "u"; gets a progress sink, returns fresh messages
         self._on_refetch = on_refetch
 
         self.tab_idx = 0
@@ -337,8 +347,13 @@ class ThreadBrowser:
             return
         self._status = "fetching..."
         self._paint()                       # show the note before the blocking call
+
+        def _progress(msg: str) -> None:    # live "[2/5]" line from worker threads
+            self._status = msg
+            self._paint()
+
         try:
-            messages = self._on_refetch()
+            messages = self._on_refetch(_progress)
         except Exception as exc:            # network / auth / provider error
             self._status = f"fetch failed: {exc}"[:70]
             return
@@ -803,6 +818,13 @@ class ThreadBrowser:
         out.flush()
 
     def run(self) -> None:
+        if not RAW_TERMINAL_SUPPORTED:
+            self.console.print(
+                "[dim]interactive browser needs a POSIX terminal "
+                "(macOS / Linux / WSL); showing a feed instead[/dim]"
+            )
+            self._dump()
+            return
         if not (sys.stdin.isatty() and self.console.file.isatty()):
             self._dump()
             return
@@ -833,14 +855,15 @@ def browse_threads(
     *,
     console: Console | None = None,
     on_read: Callable[[Thread], None] | None = None,
-    on_refetch: Callable[[], list[Message]] | None = None,
+    on_refetch: "Callable[[Callable[[str], None]], list[Message]] | None" = None,
 ) -> None:
     """Open the interactive browser over ``messages`` (grouped into threads).
 
     ``on_read`` is called once per thread when the user marks it read (``x`` /
     ``X``), for persisting the read marker (server and/or cache). ``on_refetch``
-    is called when the user hits ``u`` and must return a fresh message list; the
-    browser reloads it in place, keeping the current tab and selection.
+    is called when the user hits ``u`` -- it receives a ``progress(str)`` sink to
+    report status while it works and must return a fresh message list; the browser
+    reloads it in place, keeping the current tab and selection.
     """
     ThreadBrowser(
         messages, console=console, on_read=on_read, on_refetch=on_refetch

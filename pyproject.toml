@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "chat-interface"
+name = "unichat"
 version = "0.1.0"
 description = "Fetch and visualize chat messages from Mattermost, Slack and (partially) Discord"
 readme = "README.md"
@@ -19,12 +19,13 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "respx>=0.21"]
+slack-cookie = ["cramjam>=2.8"]   # only for `import-slack` when Slack's blob is compressed
 
 [project.scripts]
-chat-interface = "chat_interface.cli:main"
+unichat = "unichat.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/chat_interface"]
+packages = ["src/unichat"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

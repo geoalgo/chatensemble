@@ -1,11 +1,11 @@
-"""`chat-interface` helpers: cache read-through, persist, server sync."""
+"""`unichat` helpers: cache read-through, persist, server sync."""
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from chat_interface.cache import MonthStore, month_key
-from chat_interface.cli import (
+from unichat.cache import MonthStore, month_key
+from unichat.cli import (
     _apply_read_overlay,
     _cmd_install_skill,
     _load_read_overlay,
@@ -15,8 +15,8 @@ from chat_interface.cli import (
     _save_read_overlay,
     _server_mark_read,
 )
-from chat_interface.synthetic import synthetic_messages
-from chat_interface.threads import group_threads
+from unichat.synthetic import synthetic_messages
+from unichat.threads import group_threads
 
 UTC = timezone.utc
 
@@ -99,7 +99,7 @@ def test_read_overlay_roundtrip_and_apply(tmp_path):
 
 
 def test_manager_mark_read_dispatches_to_named_client():
-    from chat_interface.manager import ChatManager
+    from unichat.manager import ChatManager
 
     seen = []
 
@@ -119,10 +119,10 @@ def test_manager_fetch_runs_accounts_in_parallel_and_isolates_errors():
     import threading
     import time
 
-    from chat_interface.base import ChatClientError
-    from chat_interface.filters import FetchFilter
-    from chat_interface.manager import ChatManager
-    from chat_interface.models import ChannelKind, Message
+    from unichat.base import ChatClientError
+    from unichat.filters import FetchFilter
+    from unichat.manager import ChatManager
+    from unichat.models import ChannelKind, Message
 
     live = 0
     peak = 0
@@ -165,7 +165,7 @@ def test_manager_fetch_runs_accounts_in_parallel_and_isolates_errors():
 
 
 def test_quiet_summary_one_line_per_account(capsys):
-    from chat_interface.models import ChannelKind, Message
+    from unichat.models import ChannelKind, Message
 
     def _m(acct, day, unread):
         return Message(id=f"{acct}{day}", text="x",

@@ -5,7 +5,7 @@
 
 from datetime import datetime, timedelta, timezone
 
-from chat_interface import (
+from unichat import (
     ChatManager,
     FetchFilter,
     print_channels,

@@ -1,10 +1,10 @@
 import httpx
 import respx
 
-from chat_interface.config import AccountConfig
-from chat_interface.filters import FetchFilter
-from chat_interface.models import ChannelKind
-from chat_interface.providers.mattermost import MattermostClient
+from unichat.config import AccountConfig
+from unichat.filters import FetchFilter
+from unichat.models import ChannelKind
+from unichat.providers.mattermost import MattermostClient
 
 BASE = "https://mm.test/api/v4"
 

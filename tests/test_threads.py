@@ -6,10 +6,10 @@ from datetime import datetime, timedelta, timezone
 
 from rich.console import Console
 
-from chat_interface.browser import ThreadBrowser, _reaction_line, _truncate
-from chat_interface.models import ChannelKind, Message
-from chat_interface.synthetic import synthetic_messages
-from chat_interface.threads import group_threads, is_system_message
+from unichat.browser import ThreadBrowser, _reaction_line, _truncate
+from unichat.models import ChannelKind, Message
+from unichat.synthetic import synthetic_messages
+from unichat.threads import group_threads, is_system_message
 
 UTC = timezone.utc
 
@@ -79,7 +79,7 @@ def test_truncate_appends_literal_ellipsis():
 
 
 def test_reaction_line_renders_emoji():
-    from chat_interface.display import _emojize
+    from unichat.display import _emojize
 
     thumb, rocket, tada, heart = (_emojize(f":{n}:") for n in ("+1", "rocket", "tada", "heart"))
     assert thumb == "\N{THUMBS UP SIGN}" and ":" not in tada  # shortcodes actually resolved
@@ -105,7 +105,7 @@ def test_synthetic_is_deterministic_and_multi_account():
 
 
 def test_synthetic_default_accounts_are_distinct():
-    from chat_interface.synthetic import DEFAULT_ACCOUNTS
+    from unichat.synthetic import DEFAULT_ACCOUNTS
 
     msgs = synthetic_messages(seed=3, threads_per_account=10)
     assert {m.account for m in msgs} == set(DEFAULT_ACCOUNTS)
@@ -190,7 +190,7 @@ def test_browser_mark_read():
 
 
 def test_browser_open_in_web(monkeypatch):
-    import chat_interface.browser as br
+    import unichat.browser as br
 
     opened: list = []
     monkeypatch.setattr(br.webbrowser, "open", lambda url, new=0: opened.append(url) or True)
@@ -229,7 +229,8 @@ def test_browser_refetch_reloads_and_keeps_position():
 
     calls = []
 
-    def refetch():
+    def refetch(progress=None):
+        progress("Fetching from channels [1/1]")       # exercises the progress sink
         calls.append(1)
         return list(v2)
 
@@ -255,7 +256,7 @@ def test_browser_refetch_reloads_and_keeps_position():
 def test_browser_refetch_failure_keeps_current_view():
     msgs = synthetic_messages(("x",), seed=1, threads_per_account=5)
 
-    def boom():
+    def boom(progress=None):
         raise RuntimeError("network down")
 
     b = ThreadBrowser(msgs, console=_console(), on_refetch=boom)
@@ -264,7 +265,7 @@ def test_browser_refetch_failure_keeps_current_view():
     assert b.tab_threads[1] == before              # unchanged
     assert "network down" in b._status
 
-    b2 = ThreadBrowser(msgs, console=_console(), on_refetch=lambda: [])
+    b2 = ThreadBrowser(msgs, console=_console(), on_refetch=lambda progress=None: [])
     b2.handle("u")
     assert b2.tab_threads[1] == before
     assert "nothing" in b2._status

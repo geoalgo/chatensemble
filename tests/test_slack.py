@@ -5,9 +5,9 @@ import httpx
 import pytest
 import respx
 
-from chat_interface.base import ChatClientError
-from chat_interface.config import AccountConfig
-from chat_interface.providers.slack import SlackClient
+from unichat.base import ChatClientError
+from unichat.config import AccountConfig
+from unichat.providers.slack import SlackClient
 
 API = "https://slack.com/api"
 
@@ -97,7 +97,7 @@ def test_mark_read_without_up_to_reads_latest_ts():
 # --- speedups: client.counts activity probe (#1) + reply gating (#2) ----------
 
 def _channel(cid="C1"):
-    from chat_interface.models import Channel, ChannelKind
+    from unichat.models import Channel, ChannelKind
     return Channel(id=cid, name=cid, kind=ChannelKind.PUBLIC, account="ws", provider="slack")
 
 
@@ -247,7 +247,7 @@ def test_messages_between_runs_channels_in_parallel_and_survives_one_failure():
 
 
 def test_rate_limiter_blocks_past_the_window():
-    from chat_interface.providers.slack import _RateLimiter
+    from unichat.providers.slack import _RateLimiter
     rl = _RateLimiter(per_minute=1000)                      # generous -> never sleeps
     t0 = time.monotonic()
     for _ in range(50):

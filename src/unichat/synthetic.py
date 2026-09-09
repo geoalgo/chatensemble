@@ -1,6 +1,6 @@
 """Synthetic threads for a few fake accounts.
 
-Used by ``chat-interface demo`` to exercise the multi-account thread browser
+Used by ``unichat --synthetic`` to exercise the multi-account thread browser
 without a real server. Each account has its own *persona* -- its own people,
 channel-naming scheme and topics -- so switching tabs visibly changes the
 content. Deterministic for a given ``seed``.

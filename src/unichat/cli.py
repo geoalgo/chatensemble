@@ -1,4 +1,4 @@
-"""Command-line interface: ``chat-interface <command> [options]``."""
+"""Command-line interface: ``unichat <command> [options]``."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ def _filter_from_args(args: argparse.Namespace) -> FetchFilter:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="chat-interface",
+        prog="unichat",
         description="With no subcommand: fetch and open the interactive thread browser.",
     )
     parser.add_argument("--accounts-dir", "-d", default=str(DEFAULT_ACCOUNTS_DIR),
@@ -117,6 +117,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_skill.add_argument("--dest", help="target dir (default: ~/.claude/skills/unichat)")
     p_skill.add_argument("--force", action="store_true", help="overwrite an existing install")
+
+    p_slk = sub.add_parser(
+        "import-slack",
+        help="pull a Slack browser token + 'd' cookie from Firefox into an account YAML",
+    )
+    p_slk.add_argument("--account", "-a", help="account name to write (default: workspace slug)")
+    p_slk.add_argument("--workspace", "-w", help="substring of the workspace name/url to pick")
+    p_slk.add_argument("--profile", help="Firefox profile dir (default: autodetect)")
+    p_slk.add_argument("--list", action="store_true", help="list signed-in workspaces and exit")
+    p_slk.add_argument("--force", action="store_true", help="overwrite an existing account file")
     return parser
 
 
@@ -129,12 +139,49 @@ def _cmd_install_skill(args: argparse.Namespace) -> int:
     if dest.exists() and not args.force:
         console.print(f"[yellow]{dest} already exists — pass --force to overwrite[/yellow]")
         return 1
-    with as_file(files("chat_interface") / "skill") as src:
+    with as_file(files("unichat") / "skill") as src:
         dest.parent.mkdir(parents=True, exist_ok=True)
         if dest.exists():
             shutil.rmtree(dest)
         shutil.copytree(src, dest)
     console.print(f"installed the 'unichat' skill to {dest}")
+    return 0
+
+
+def _cmd_import_slack(args: argparse.Namespace) -> int:
+    from .slack_cookie import (
+        SlackCookieError,
+        find_firefox_profile,
+        pick_workspace,
+        read_d_cookie,
+        read_workspaces,
+        write_account_yaml,
+    )
+
+    try:
+        profile = find_firefox_profile(args.profile)
+        workspaces = read_workspaces(profile)
+        if args.list:
+            for w in workspaces:
+                mark = "[green]token[/green]" if w.token else "[red]no token[/red]"
+                console.print(f"  {w.label:<26} {w.domain:<30} {mark}")
+            return 0
+        ws = pick_workspace(workspaces, args.workspace)
+        cookie = read_d_cookie(profile)
+    except SlackCookieError as exc:
+        console.print(f"[red]{exc}[/red]")
+        return 2
+
+    name = args.account or (ws.domain.split(".")[0] if ws.domain else ws.label) or "slack"
+    dest = Path(args.accounts_dir).expanduser() / f"{name}.yaml"
+    if dest.exists() and not args.force:
+        console.print(f"[yellow]{dest} exists — pass --force to overwrite[/yellow]")
+        return 1
+    write_account_yaml(dest, ws.token, cookie)
+    console.print(
+        f"wrote {dest}  (token {ws.token[:9]}…{ws.token[-4:]}, cookie {len(cookie)} chars)"
+    )
+    console.print(f"test:  uv run unichat channels -a {name}")
     return 0
 
 
@@ -320,9 +367,16 @@ def _server_mark_read(mgr, threads) -> list[tuple[str, str]]:
     return errors
 
 
+def _stderr_status(msg: str) -> None:
+    """Overwrite one status line on stderr (cleared with an empty ``msg``)."""
+    sys.stderr.write("\r\x1b[2K" + msg)
+    sys.stderr.flush()
+
+
 def _cmd_browse(args: argparse.Namespace) -> None:
     from .browser import browse_threads
     from .cache import DEFAULT_CACHE_ROOT
+    from .progress import ChannelProgressReporter
     from .synthetic import synthetic_messages
 
     real = not args.synthetic
@@ -344,7 +398,10 @@ def _cmd_browse(args: argparse.Namespace) -> None:
         if mgr is None or args.no_fetch:
             messages = _read_cache_direct(cache_root, args.days, args.accounts)
         else:
-            messages = mgr.fetch(flt, progress=sys.stderr.isatty())
+            prog = ChannelProgressReporter(_stderr_status) if sys.stderr.isatty() else None
+            messages = mgr.fetch(flt, progress=prog)
+            if prog is not None:
+                _stderr_status("")                    # clear the progress line
             for name, err in mgr.errors.items():
                 console.print(f"[yellow]{name}: {err} — showing cached data[/yellow]")
                 messages += _read_cache_direct(cache_root, args.days, [name])
@@ -395,9 +452,10 @@ def _cmd_browse(args: argparse.Namespace) -> None:
                     sync_errors.extend(_server_mark_read(mgr, marked))
             marked.clear()
 
-        def refetch() -> list:
+        def refetch(progress=None) -> list:
             flush_read()                      # commit reads before pulling fresh state
-            fresh = mgr.fetch(flt, progress=False)
+            rep = ChannelProgressReporter(progress) if progress else None
+            fresh = mgr.fetch(flt, progress=rep)
             sync_errors.extend((n, f"refetch: {e}") for n, e in mgr.errors.items())
             _apply_read_overlay(fresh, overlay)
             return fresh
@@ -426,6 +484,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "install-skill":
         return _cmd_install_skill(args)
+    if args.command == "import-slack":
+        return _cmd_import_slack(args)
 
     try:
         mgr = ChatManager.from_dir(args.accounts_dir)

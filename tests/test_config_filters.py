@@ -2,9 +2,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-from chat_interface.config import ConfigError, load_account_file, load_accounts
-from chat_interface.filters import FetchFilter, parse_when
-from chat_interface.models import Channel, ChannelKind, Message
+from unichat.config import ConfigError, load_account_file, load_accounts
+from unichat.filters import FetchFilter, parse_when
+from unichat.models import Channel, ChannelKind, Message
 
 NOW = datetime(2026, 8, 31, 12, 0, tzinfo=timezone.utc)
 
