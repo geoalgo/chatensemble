@@ -82,7 +82,7 @@ class ChatManager:
         at a time until an empty year; ``refresh=True`` re-fetches every month in
         range; ``offline=True`` serves purely from disk with no network at all
         (implies ``cache``). ``progress`` may be ``True`` (a tqdm bar), a
-        :class:`~unichat.progress.Reporter`, or a ``callable(str)``.
+        :class:`~chatensemble.progress.Reporter`, or a ``callable(str)``.
         Errors from one account are recorded in :attr:`errors` and skipped.
 
         Accounts are fetched concurrently (one thread each, up to ``max_workers``

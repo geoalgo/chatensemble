@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from datetime import datetime, timezone
 
-from unichat.base import ChatClient
-from unichat.cache import (
+from chatensemble.base import ChatClient
+from chatensemble.cache import (
     CachedFetcher,
     MonthStore,
     month_end,
@@ -13,9 +13,9 @@ from unichat.cache import (
     months_in_range,
     year_month_keys,
 )
-from unichat.config import AccountConfig
-from unichat.filters import FetchFilter
-from unichat.models import Channel, ChannelKind, Message
+from chatensemble.config import AccountConfig
+from chatensemble.filters import FetchFilter
+from chatensemble.models import Channel, ChannelKind, Message
 
 UTC = timezone.utc
 NOW = datetime(2026, 9, 15, 12, 0, tzinfo=UTC)

@@ -1,11 +1,11 @@
-"""`unichat` helpers: cache read-through, persist, server sync."""
+"""`chatensemble` helpers: cache read-through, persist, server sync."""
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from unichat.cache import MonthStore, month_key
-from unichat.cli import (
+from chatensemble.cache import MonthStore, month_key
+from chatensemble.cli import (
     _apply_read_overlay,
     _cmd_install_skill,
     _load_read_overlay,
@@ -15,8 +15,8 @@ from unichat.cli import (
     _save_read_overlay,
     _server_mark_read,
 )
-from unichat.synthetic import synthetic_messages
-from unichat.threads import group_threads
+from chatensemble.synthetic import synthetic_messages
+from chatensemble.threads import group_threads
 
 UTC = timezone.utc
 
@@ -99,7 +99,7 @@ def test_read_overlay_roundtrip_and_apply(tmp_path):
 
 
 def test_manager_mark_read_dispatches_to_named_client():
-    from unichat.manager import ChatManager
+    from chatensemble.manager import ChatManager
 
     seen = []
 
@@ -119,10 +119,10 @@ def test_manager_fetch_runs_accounts_in_parallel_and_isolates_errors():
     import threading
     import time
 
-    from unichat.base import ChatClientError
-    from unichat.filters import FetchFilter
-    from unichat.manager import ChatManager
-    from unichat.models import ChannelKind, Message
+    from chatensemble.base import ChatClientError
+    from chatensemble.filters import FetchFilter
+    from chatensemble.manager import ChatManager
+    from chatensemble.models import ChannelKind, Message
 
     live = 0
     peak = 0
@@ -165,7 +165,7 @@ def test_manager_fetch_runs_accounts_in_parallel_and_isolates_errors():
 
 
 def test_quiet_summary_one_line_per_account(capsys):
-    from unichat.models import ChannelKind, Message
+    from chatensemble.models import ChannelKind, Message
 
     def _m(acct, day, unread):
         return Message(id=f"{acct}{day}", text="x",
@@ -187,11 +187,11 @@ def test_quiet_summary_one_line_per_account(capsys):
 def test_install_skill_copies_packaged_skill(tmp_path):
     import argparse
 
-    dest = tmp_path / "unichat"
+    dest = tmp_path / "chatensemble"
     assert _cmd_install_skill(argparse.Namespace(dest=str(dest), force=False)) == 0
     skill = (dest / "SKILL.md").read_text()
-    assert skill.startswith("---\nname: unichat")
-    assert "~/unichat/cache" in skill and "_read_overlay.json" in skill
+    assert skill.startswith("---\nname: chatensemble")
+    assert "~/chatensemble/cache" in skill and "_read_overlay.json" in skill
 
     # refuses without --force, then overwrites with it
     assert _cmd_install_skill(argparse.Namespace(dest=str(dest), force=False)) == 1

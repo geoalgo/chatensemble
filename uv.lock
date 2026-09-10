@@ -25,6 +25,42 @@ wheels = [
 ]
 
 [[package]]
+name = "chatensemble"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "httpx" },
+    { name = "pyarrow" },
+    { name = "python-dateutil" },
+    { name = "pyyaml" },
+    { name = "rich" },
+    { name = "tqdm" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "respx" },
+]
+slack-cookie = [
+    { name = "cramjam" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cramjam", marker = "extra == 'slack-cookie'", specifier = ">=2.8" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pyarrow", specifier = ">=25.0.1" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "python-dateutil", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "respx", marker = "extra == 'dev'", specifier = ">=0.21" },
+    { name = "rich", specifier = ">=13.7" },
+    { name = "tqdm", specifier = ">=4.70.0" },
+]
+provides-extras = ["dev", "slack-cookie"]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -442,39 +478,3 @@ sdist = { url = "https://files.pythonhosted.org/packages/f6/cc/6253133b5bb138fc3
 wheels = [
     { url = "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl", hash = "sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8", size = 45571, upload-time = "2026-07-02T08:40:04.659Z" },
 ]
-
-[[package]]
-name = "unichat"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "httpx" },
-    { name = "pyarrow" },
-    { name = "python-dateutil" },
-    { name = "pyyaml" },
-    { name = "rich" },
-    { name = "tqdm" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "respx" },
-]
-slack-cookie = [
-    { name = "cramjam" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "cramjam", marker = "extra == 'slack-cookie'", specifier = ">=2.8" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "pyarrow", specifier = ">=25.0.1" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "python-dateutil", specifier = ">=2.9" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "respx", marker = "extra == 'dev'", specifier = ">=0.21" },
-    { name = "rich", specifier = ">=13.7" },
-    { name = "tqdm", specifier = ">=4.70.0" },
-]
-provides-extras = ["dev", "slack-cookie"]

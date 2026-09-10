@@ -1,33 +1,33 @@
 ---
-name: unichat
+name: chatensemble
 description: >
   Answer questions about the user's chat messages (Mattermost / Slack) by querying
-  the local `unichat` message cache. Use for: summarize unread messages
+  the local `chatensemble` message cache. Use for: summarize unread messages
   (optionally scoped to an account or channel), search across chats for a topic,
   recall a decision or discussion from a channel/thread, "what did <person> say
   about <X>", "when did we choose <Y>".
 ---
 
-# unichat — query the local chat cache
+# chatensemble — query the local chat cache
 
-`unichat` stores every fetched message as **Parquet**, one flat row per
+`chatensemble` stores every fetched message as **Parquet**, one flat row per
 message:
 
 ```
-~/unichat/cache/<account>/<YYYY-MM>.parquet     # month-partitioned, UTC
-~/unichat/cache/_read_overlay.json              # thread ids marked read in the browser
+~/chatensemble/cache/<account>/<YYYY-MM>.parquet     # month-partitioned, UTC
+~/chatensemble/cache/_read_overlay.json              # thread ids marked read in the browser
 ```
 
 ## Step 1 — refresh if stale
 
 The cache is only as current as the last fetch. If the user hasn't run
-`unichat` (fetch or the browser) in the last hour or two, refresh first —
+`chatensemble` (fetch or the browser) in the last hour or two, refresh first —
 it prints one line per account, no message dump:
 
 ```sh
-unichat fetch --since 30d --quiet
-# scope it:  unichat fetch --since 30d --quiet -a ufal
-# older discussion? widen it: unichat fetch --since 6m --quiet
+chatensemble fetch --since 30d --quiet
+# scope it:  chatensemble fetch --since 30d --quiet -a ufal
+# older discussion? widen it: chatensemble fetch --since 6m --quiet
 ```
 
 Skip this if a fetch/browse clearly ran recently, or the user says to use the cache as-is.
@@ -35,7 +35,7 @@ Skip this if a fetch/browse clearly ran recently, or the user says to use the ca
 To map a vague channel name ("WP4") to a real `channel_name`:
 
 ```sh
-unichat channels -a ufal
+chatensemble channels -a ufal
 ```
 
 ## Step 2 — query the Parquet with DuckDB
@@ -45,7 +45,7 @@ Run DuckDB via `uv` (no install needed — it's fetched once and cached):
 ````sh
 uv run --with duckdb python - <<'PY'
 import duckdb, os
-root = os.path.expanduser("~/unichat/cache")
+root = os.path.expanduser("~/chatensemble/cache")
 duckdb.sql(f"""
   SELECT m.account, m.channel_name, m.author_name,
          strftime(epoch_ms(m.ts_ms), '%Y-%m-%d %H:%M') AS at,
@@ -63,8 +63,8 @@ PY
 - Use `.pl()` / `.df()` / `.fetchall()` instead of `.show()` if you need to
   process the rows in Python.
 - If the `duckdb` CLI is already on PATH, `duckdb -json -c "<same SQL>"` also works
-  (`read_parquet('~/unichat/cache/*/*.parquet')`).
-- Last resort (no network for `uv`): `pyarrow` ships with `unichat` — read
+  (`read_parquet('~/chatensemble/cache/*/*.parquet')`).
+- Last resort (no network for `uv`): `pyarrow` ships with `chatensemble` — read
   files with `pyarrow.parquet.read_table(f, columns=[...])` and filter in Python.
 
 ## Schema
@@ -88,9 +88,9 @@ PY
 ## `is_unread` caveat
 
 `is_unread` is the value from the **last fetch** — accurate right after
-`unichat fetch` (recomputed from the server read marker). The interactive
+`chatensemble fetch` (recomputed from the server read marker). The interactive
 browser's manual "mark read" (`x`) is stored **only** in
-`~/unichat/cache/_read_overlay.json` as `{"threads": ["<thread_id>", ...]}`, never
+`~/chatensemble/cache/_read_overlay.json` as `{"threads": ["<thread_id>", ...]}`, never
 written back to Parquet.
 
 So for "what's unread": refresh first (Step 1) **and** exclude overlay threads:
@@ -98,11 +98,11 @@ So for "what's unread": refresh first (Step 1) **and** exclude overlay threads:
 ```sql
 WITH read AS (
   SELECT unnest(threads) AS thread_id
-  FROM read_json_auto('~/unichat/cache/_read_overlay.json')
+  FROM read_json_auto('~/chatensemble/cache/_read_overlay.json')
 )
 SELECT m.account, m.channel_name, m.author_name,
        strftime(epoch_ms(m.ts_ms), '%Y-%m-%d %H:%M') AS at, m.text, m.permalink
-FROM read_parquet('~/unichat/cache/*/*.parquet') m
+FROM read_parquet('~/chatensemble/cache/*/*.parquet') m
 WHERE m.is_unread
   AND m.thread_id NOT IN (SELECT thread_id FROM read)
 ORDER BY m.account, m.ts_ms
@@ -113,7 +113,7 @@ ORDER BY m.account, m.ts_ms
 ## Worked examples
 
 ### "Summarize the unread messages on WP4 / ufal"
-1. `unichat fetch --since 30d --quiet -a ufal`
+1. `chatensemble fetch --since 30d --quiet -a ufal`
 2. Run the unread query above with `read_parquet('{root}/ufal/*.parquet')` and
    `AND lower(m.channel_name) LIKE '%wp4%'`.
 3. Read the rows chronologically; summarize grouped by thread / sub-topic; cite
@@ -124,7 +124,7 @@ Same query, no channel/account filter. If it's a lot, summarize grouped by
 `account` then `channel_name` (a line or two each) with a total count.
 
 ### "Find all messages where we discussed TRL — when did we choose the framework?"
-1. Refresh with a wide window if it may be old: `unichat fetch --since 6m --quiet`.
+1. Refresh with a wide window if it may be old: `chatensemble fetch --since 6m --quiet`.
 2. Find matching threads:
    `SELECT DISTINCT account, thread_id, channel_name FROM read_parquet('{root}/*/*.parquet') WHERE text ILIKE '%TRL%'`
 3. Pull each full thread in order:

@@ -6,10 +6,10 @@ from datetime import datetime, timedelta, timezone
 
 from rich.console import Console
 
-from unichat.browser import ThreadBrowser, _reaction_line, _truncate
-from unichat.models import ChannelKind, Message
-from unichat.synthetic import synthetic_messages
-from unichat.threads import group_threads, is_system_message
+from chatensemble.browser import ThreadBrowser, _reaction_line, _truncate
+from chatensemble.models import ChannelKind, Message
+from chatensemble.synthetic import synthetic_messages
+from chatensemble.threads import group_threads, is_system_message
 
 UTC = timezone.utc
 
@@ -79,7 +79,7 @@ def test_truncate_appends_literal_ellipsis():
 
 
 def test_reaction_line_renders_emoji():
-    from unichat.display import _emojize
+    from chatensemble.display import _emojize
 
     thumb, rocket, tada, heart = (_emojize(f":{n}:") for n in ("+1", "rocket", "tada", "heart"))
     assert thumb == "\N{THUMBS UP SIGN}" and ":" not in tada  # shortcodes actually resolved
@@ -105,7 +105,7 @@ def test_synthetic_is_deterministic_and_multi_account():
 
 
 def test_synthetic_default_accounts_are_distinct():
-    from unichat.synthetic import DEFAULT_ACCOUNTS
+    from chatensemble.synthetic import DEFAULT_ACCOUNTS
 
     msgs = synthetic_messages(seed=3, threads_per_account=10)
     assert {m.account for m in msgs} == set(DEFAULT_ACCOUNTS)
@@ -190,7 +190,7 @@ def test_browser_mark_read():
 
 
 def test_browser_open_in_web(monkeypatch):
-    import unichat.browser as br
+    import chatensemble.browser as br
 
     opened: list = []
     monkeypatch.setattr(br.webbrowser, "open", lambda url, new=0: opened.append(url) or True)

@@ -97,7 +97,7 @@ class SlackClient(ChatClient):
             timeout=30.0,
             headers={
                 "Authorization": f"Bearer {self.token}",
-                "User-Agent": "unichat/0.1",
+                "User-Agent": "chatensemble/0.1",
             },
             cookies={"d": self.cookie} if self.cookie else None,
         )

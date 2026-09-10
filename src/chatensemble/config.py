@@ -1,4 +1,4 @@
-"""Account configuration: one YAML file per account under ``~/unichat/accounts/``."""
+"""Account configuration: one YAML file per account under ``~/chatensemble/accounts/``."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Any
 import yaml
 
 # credentials live outside any code checkout; override per-run with --accounts-dir
-DEFAULT_ACCOUNTS_DIR = Path.home() / "unichat" / "accounts"
+DEFAULT_ACCOUNTS_DIR = Path.home() / "chatensemble" / "accounts"
 
 _ENV_RE = re.compile(r"\$\{([A-Z0-9_]+)\}|\$([A-Z0-9_]+)")
 

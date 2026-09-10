@@ -1,6 +1,6 @@
 """Month-partitioned message cache.
 
-Layout (``<root>`` defaults to ``~/unichat/cache``)::
+Layout (``<root>`` defaults to ``~/chatensemble/cache``)::
 
     <root>/<account>/2026-07.parquet   every message, all channels
     <root>/<account>/2026-08.parquet
@@ -31,7 +31,7 @@ from .progress import Reporter, as_reporter
 from .serde import read_parquet, write_parquet
 
 UTC = timezone.utc
-DEFAULT_CACHE_ROOT = Path.home() / "unichat" / "cache"
+DEFAULT_CACHE_ROOT = Path.home() / "chatensemble" / "cache"
 _EXT = ".parquet"
 _MIN_YEAR = 2010
 

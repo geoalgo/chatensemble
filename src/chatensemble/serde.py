@@ -39,7 +39,7 @@ _SCHEMA = pa.schema(
         ("reactions_json", pa.string()),
         ("raw_json", pa.string()),
     ],
-    metadata={b"unichat.schema": str(SCHEMA_VERSION).encode()},
+    metadata={b"chatensemble.schema": str(SCHEMA_VERSION).encode()},
 )
 
 _COLUMNS = [f.name for f in _SCHEMA]

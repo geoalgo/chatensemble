@@ -5,7 +5,7 @@
 
 from datetime import datetime, timedelta, timezone
 
-from unichat import (
+from chatensemble import (
     ChatManager,
     FetchFilter,
     print_channels,
@@ -13,7 +13,7 @@ from unichat import (
     print_messages,
 )
 
-with ChatManager.from_dir() as mgr:          # ~/unichat/accounts by default
+with ChatManager.from_dir() as mgr:          # ~/chatensemble/accounts by default
     # 1. what accounts are configured
     print("accounts:", [c.name for c in mgr.clients])
 

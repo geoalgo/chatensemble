@@ -1,4 +1,4 @@
-"""Command-line interface: ``unichat <command> [options]``."""
+"""Command-line interface: ``chatensemble <command> [options]``."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ def _filter_from_args(args: argparse.Namespace) -> FetchFilter:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="unichat",
+        prog="chatensemble",
         description="With no subcommand: fetch and open the interactive thread browser.",
     )
     parser.add_argument("--accounts-dir", "-d", default=str(DEFAULT_ACCOUNTS_DIR),
@@ -113,9 +113,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_skill = sub.add_parser(
         "install-skill",
-        help="copy the 'unichat' Claude Code skill to ~/.claude/skills/",
+        help="copy the 'chatensemble' Claude Code skill to ~/.claude/skills/",
     )
-    p_skill.add_argument("--dest", help="target dir (default: ~/.claude/skills/unichat)")
+    p_skill.add_argument("--dest", help="target dir (default: ~/.claude/skills/chatensemble)")
     p_skill.add_argument("--force", action="store_true", help="overwrite an existing install")
 
     p_slk = sub.add_parser(
@@ -135,16 +135,16 @@ def _cmd_install_skill(args: argparse.Namespace) -> int:
     from importlib.resources import as_file, files
 
     dest = (Path(args.dest).expanduser() if args.dest
-            else Path.home() / ".claude" / "skills" / "unichat")
+            else Path.home() / ".claude" / "skills" / "chatensemble")
     if dest.exists() and not args.force:
         console.print(f"[yellow]{dest} already exists — pass --force to overwrite[/yellow]")
         return 1
-    with as_file(files("unichat") / "skill") as src:
+    with as_file(files("chatensemble") / "skill") as src:
         dest.parent.mkdir(parents=True, exist_ok=True)
         if dest.exists():
             shutil.rmtree(dest)
         shutil.copytree(src, dest)
-    console.print(f"installed the 'unichat' skill to {dest}")
+    console.print(f"installed the 'chatensemble' skill to {dest}")
     return 0
 
 
@@ -181,7 +181,7 @@ def _cmd_import_slack(args: argparse.Namespace) -> int:
     console.print(
         f"wrote {dest}  (token {ws.token[:9]}…{ws.token[-4:]}, cookie {len(cookie)} chars)"
     )
-    console.print(f"test:  uv run unichat channels -a {name}")
+    console.print(f"test:  uv run chatensemble channels -a {name}")
     return 0
 
 

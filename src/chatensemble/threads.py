@@ -2,7 +2,7 @@
 
 A thread is a root message plus every reply that carries its ``thread_id``.
 This is provider-agnostic: it works on anything ``fetch`` returns as well as on
-the synthetic data in :mod:`unichat.synthetic`.
+the synthetic data in :mod:`chatensemble.synthetic`.
 """
 
 from __future__ import annotations

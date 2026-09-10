@@ -48,7 +48,7 @@ class MattermostClient(ChatClient):
             base_url=self.api,
             timeout=30.0,
             verify=self._verify,
-            headers={"User-Agent": "unichat/0.1"},
+            headers={"User-Agent": "chatensemble/0.1"},
             follow_redirects=True,
         )
 
