@@ -9,5 +9,5 @@ build/
 .DS_Store
 
 # Credentials live in ~/chatensemble/accounts/ — never commit a local copy
-/accounts/
+accounts/
 *.env
