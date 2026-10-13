@@ -267,10 +267,12 @@ platforms, but the LevelDB token read would still need to be hand-rolled.
 
 ## TODOs
 
-- **Reply** - support reply by hitting "r" and typing a message.
 - **UI** - better output when loading accounts for first time, show message in case of error. Show "Loading cache from ~/chatensemble/cache/" when serving from disk. (Scan progress is done: `Fetching from automl channels [2/5]`, live, on startup and on `u`.)
 - **Providers** — Discord (bot token, joined guilds only). Teams.
 
+**Important note.** No feature currently allow to send messages. While sending messages through the terminal UI
+work is possible, I do not want to have any feature allowing claude code or other agent to send
+messages to avoid having slop being send to public channel.
 
 ## Done
 - **GitHub provider** — `type: github`, one `Channel` per configured repo. An issue
