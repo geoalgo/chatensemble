@@ -29,6 +29,7 @@ _EMOJI_ALIASES = {
     "point_up": "☝️", "ok_hand": "👌", "clap": "👏", "muscle": "💪",
     "warning": "⚠️", "bulb": "💡", "bug": "🐛", "sweat_smile": "😅",
     "slightly_smiling_face": "🙂", "sunglasses": "😎",
+    "laugh": "😄", "hooray": "🎉",  # GitHub's reaction field names
 }
 
 
@@ -55,7 +56,7 @@ _KIND_MARK = {
     ChannelKind.DIRECT: "@",
     ChannelKind.GROUP: "👥",
 }
-_PROVIDER_STYLE = {"mattermost": "cyan", "slack": "magenta", "discord": "blue"}
+_PROVIDER_STYLE = {"mattermost": "cyan", "slack": "magenta", "discord": "blue", "github": "green"}
 
 
 def _fmt_time(ts: datetime, *, now: datetime | None = None) -> Text:

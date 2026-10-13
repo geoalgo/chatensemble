@@ -37,7 +37,7 @@ def _expand_env(value: Any) -> Any:
 @dataclass
 class AccountConfig:
     name: str
-    type: str  # "mattermost" | "slack" | "discord"
+    type: str  # "mattermost" | "slack" | "discord" | "github"
     settings: dict[str, Any] = field(default_factory=dict)
     source: Path | None = None
 
@@ -67,10 +67,10 @@ def load_account_file(path: Path) -> AccountConfig:
         raise ConfigError(f"{path}: top level must be a mapping")
 
     acc_type = (data.pop("type", None) or _infer_type(path, data) or "").lower()
-    if acc_type not in {"mattermost", "slack", "discord"}:
+    if acc_type not in {"mattermost", "slack", "discord", "github"}:
         raise ConfigError(
             f"{path}: unknown or missing account 'type' (got {acc_type!r}); "
-            "expected one of mattermost, slack, discord"
+            "expected one of mattermost, slack, discord, github"
         )
     name = str(data.pop("name", None) or path.stem)
     return AccountConfig(name=name, type=acc_type, settings=data, source=path)
@@ -78,12 +78,16 @@ def load_account_file(path: Path) -> AccountConfig:
 
 def _infer_type(path: Path, data: dict[str, Any]) -> str | None:
     stem = path.stem.lower()
-    for t in ("mattermost", "slack", "discord"):
+    for t in ("mattermost", "slack", "discord", "github"):
         if t in stem:
             return t
     token = str(data.get("token", ""))
     if token.startswith(("xoxp-", "xoxb-", "xoxc-")):
         return "slack"
+    if token.startswith(("ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_")):
+        return "github"
+    if "repos" in data:
+        return "github"
     if "server" in data or "url" in data:
         return "mattermost"
     return None

@@ -51,6 +51,18 @@ token: ${SLACK_XOXC}         # request's "token" form field
 cookie: ${SLACK_XOXD}        # request's "d" cookie
 ```
 
+**GitHub** — issues are threads (the issue is the root message, comments are
+replies) — `~/chatensemble/accounts/github.yaml`
+
+```yaml
+type: github
+repos:
+  - OpenEuroLLM/Taskboard    # owner/repo, or a full github.com URL
+token: ${GITHUB_TOKEN}       # optional for public repos; required for private repos
+                              # and unread state (60 req/hr unauthenticated)
+# include_pull_requests: false   # PRs come back from the same endpoint; off by default
+```
+
 ## Usage
 
 ### Show messages
@@ -192,7 +204,7 @@ calendar month (UTC):
 
 `fetch` / `unread` show a `tqdm` bar per live month (`ufal 2026-07: 73%|███ | 117/160`),
 one row per account. The thread browser (startup and `u`) shows a single live
-`Fetching from channels [2/5]` line instead. From Python: `mgr.fetch(flt,
+`Fetching from automl channels [2/5]` line instead. From Python: `mgr.fetch(flt,
 progress=True)` for the bars, or pass a `Reporter` — `ChannelProgressReporter(sink)`
 for the `[done/total]` line, or a `callable(str)`.
 
@@ -212,28 +224,64 @@ cache dir, token rate limits):
 
 ## Providers
 
-| Capability                  | Mattermost | Slack (user token) | Discord |
-|-----------------------------|:----------:|:------------------:|:-------:|
-| Username / password login   | ✅         | ✖ (no such API)    | ✖       |
-| Personal access token       | ✅         | ✅ (`xoxp-`/`xoxb-`) | partial |
-| Browser session (as "me")   | —          | ✅ (`xoxc-` + `d` cookie) | ✖  |
-| Multi-team / workspace       | ✅         | ✅                 | partial |
-| Cross-channel fetch          | ✅         | ✅                 | partial |
-| DMs / group DMs / threads    | ✅         | ✅                 | partial |
-| True per-user unread state   | ✅         | ✅ (`last_read`)    | partial |
-| Mark read (`mark_read`)      | ✅ (channel) | ✅ (`conversations.mark`) | ✖ |
+| Capability                  | Mattermost | Slack (user token) | GitHub | Discord | WhatsApp | Gmail |
+|-----------------------------|:----------:|:------------------:|:------:|:-------:|:--------:|:-----:|
+| **Status**                  | Implemented | Implemented       | Implemented | Not implemented | Not implemented | Not implemented |
+| Username / password login   | ✅         | ✖ (no such API)    | ✖ (no such API) | ✖       | ✖ | partial (IMAP app password) |
+| Personal access token       | ✅         | ✅ (`xoxp-`/`xoxb-`) | optional (`ghp_…`; public repos work with none) | partial | ✖ (business token only) | ✅ (OAuth refresh token) |
+| Browser session (as "me")   | —          | ✅ (`xoxc-` + `d` cookie) | ✖ | ✖  | ✖ (linked device violates ToS) | ✖ (not needed) |
+| Multi-team / workspace       | ✅         | ✅                 | — (repos) | partial | — | — (labels) |
+| Cross-channel fetch          | ✅         | ✅                 | ✅ (`since=`, per repo) | partial | partial (chat export only) | ✅ (`q=after:… before:…`) |
+| DMs / group DMs / threads    | ✅         | ✅                 | ✅ (issue = thread, comments = replies) | partial | partial (export; no threads) | ✅ (native `threadId`) |
+| True per-user unread state   | ✅         | ✅ (`last_read`)    | ✅ (Notifications API, repos you watch) | partial | ✖ | ✅ (`UNREAD` label) |
+| Mark read (`mark_read`)      | ✅ (channel) | ✅ (`conversations.mark`) | ✅ (repo notifications) | ✖ | ✖ | ✅ (`messages.modify`) |
+
+GitHub issues are threads: the issue itself is the root message and each comment is a
+reply (`thread_id` = the issue). Pull requests come back from the same endpoint, so
+they're excluded by default — set `include_pull_requests: true` to include them (as
+issues; inline review comments aren't fetched). Unread state comes from the
+Notifications API, which only covers repos the account is watching, so an unwatched
+repo always reads as fully read.
 
 Discord's API terms forbid most user-token automation, so only bot-token access to joined
 guilds would be viable — not implemented in this first cut.
 
+WhatsApp has no API for reading a personal inbox. The official Cloud API is for
+businesses: send-only plus push webhooks, no history or chat-list endpoint. Unofficial
+linked-device libraries (Baileys, whatsapp-web.js) violate WhatsApp's ToS and risk
+permanent bans. The ToS-clean route is importing exported chats (*Export chat* →
+`.txt`), which gives messages only: no unread state, permalinks or live sync.
+
+Gmail fits well: the official API is ToS-friendly and has native threads, a real
+`UNREAD` label and date-range search. Auth is the friction — OAuth through your own
+Google Cloud project (`gmail.readonly` is a *restricted* scope; in "Testing" mode
+refresh tokens expire after 7 days). Personal accounts can instead use IMAP with an
+app password (needs 2-Step Verification; Workspace accounts require OAuth).
+
+`import-slack` only reads Firefox's plaintext SQLite profile stores. Chrome/Chromium
+keeps cookies encrypted via the OS keychain (macOS Keychain, Windows DPAPI, a Linux
+keyring or a fixed fallback) and stores the `xoxc-` token in LevelDB rather than SQLite,
+so supporting it needs per-OS decryption plus a LevelDB reader in place of stdlib
+`sqlite3`. `browser_cookie3` already handles the cookie-decryption half across
+platforms, but the LevelDB token read would still need to be hand-rolled.
+
 ## TODOs
 
 - **Reply** - support reply by hitting "r" and typing a message.
-- **UI** - better output when loading accounts for first time, show message in case of error. Show "Loading cache from ~/chatensemble/cache/" when serving from disk. (Scan progress is done: `Fetching from channels [2/5]`, live, on startup and on `u`.)
+- **UI** - better output when loading accounts for first time, show message in case of error. Show "Loading cache from ~/chatensemble/cache/" when serving from disk. (Scan progress is done: `Fetching from automl channels [2/5]`, live, on startup and on `u`.)
 - **Providers** — Discord (bot token, joined guilds only). Teams.
 
 
 ## Done
+- **GitHub provider** — `type: github`, one `Channel` per configured repo. An issue
+  is a thread: the issue is the root message, comments are replies (`thread_id` =
+  the issue's global id, not its per-repo `#number`, to stay unique across repos).
+  No upper-bound pagination trick needed here (unlike Mattermost) — the `since`
+  query param is a real server-side filter with complete pagination, so every page
+  fetched is already relevant. Unread comes from the Notifications API (repos the
+  account watches only); `mark_read` hits the per-repo notifications endpoint.
+  Token is optional for public repos (60 req/hr unauthenticated, verified live
+  against `OpenEuroLLM/Taskboard`); required for private repos and for unread.
 - **`import-slack`** — pulls the Slack web token (`xoxc-`) + `d` cookie (`xoxd-`)
   from a local Firefox profile into `~/chatensemble/accounts/<name>.yaml`; `--list`
   shows signed-in workspaces, `--workspace` picks one. Logic moved from the old

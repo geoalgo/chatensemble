@@ -1,4 +1,4 @@
-"""chatensemble: unified fetch/visualise for Mattermost, Slack, Discord."""
+"""chatensemble: unified fetch/visualise for Mattermost, Slack, GitHub, Discord."""
 
 from __future__ import annotations
 

@@ -41,31 +41,36 @@ class CallbackReporter(Reporter):
 
 
 class ChannelProgressReporter(Reporter):
-    """Feeds ``sink`` a running ``"Fetching from channels [<done>/<total>]"`` line
-    as live months are scanned. Thread-safe -- one instance is shared across the
-    parallel per-account fetchers."""
+    """Feeds ``sink`` a running ``"Fetching from <account> channels [<done>/<total>]"``
+    line as live months are scanned. Thread-safe -- one instance is shared across the
+    parallel per-account fetchers, so ``<account>`` names whichever account's channel
+    was most recently reported (they interleave as fetches race each other)."""
 
     def __init__(self, sink: Callable[[str], None]) -> None:
         self._sink = sink
         self._lock = threading.Lock()
         self._done = 0
         self._total = 0
+        self._account: str | None = None
 
     def month_start(self, account: str, month: str, total: int, live: bool) -> None:
         if not live:
             return
         with self._lock:
             self._total += total
+            self._account = account
             self._emit()
 
     def channel(self, account: str, month: str, index: int, total: int, name: str) -> None:
         with self._lock:
             self._done += 1
+            self._account = account
             self._emit()
 
     def _emit(self) -> None:
         total = max(self._total, self._done, 1)
-        self._sink(f"Fetching from channels [{self._done}/{total}]")
+        label = f"{self._account} " if self._account else ""
+        self._sink(f"Fetching from {label}channels [{self._done}/{total}]")
 
 
 class TqdmReporter(Reporter):

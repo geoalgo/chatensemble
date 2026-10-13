@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from ..base import ChatClient
 from ..config import AccountConfig
+from .github import GitHubClient
 from .mattermost import MattermostClient
 from .slack import SlackClient
 
 _REGISTRY: dict[str, type[ChatClient]] = {
     "mattermost": MattermostClient,
     "slack": SlackClient,
+    "github": GitHubClient,
 }
 
 
@@ -24,4 +26,4 @@ def create_client(account: AccountConfig) -> ChatClient:
     return cls(account)
 
 
-__all__ = ["create_client", "MattermostClient", "SlackClient"]
+__all__ = ["create_client", "MattermostClient", "SlackClient", "GitHubClient"]
