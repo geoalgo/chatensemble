@@ -1,7 +1,7 @@
 ---
 name: chatensemble
 description: >
-  Answer questions about the user's chat messages (Mattermost / Slack) by querying
+  Answer questions about the user's chat messages (Mattermost / Slack) and GitHub issues by querying
   the local `chatensemble` message cache. Use for: summarize unread messages
   (optionally scoped to an account or channel), search across chats for a topic,
   recall a decision or discussion from a channel/thread, "what did <person> say
@@ -72,18 +72,23 @@ PY
 | column | notes |
 |---|---|
 | `id` | message id |
-| `text` | body (Slack is pre-cleaned; Mattermost keeps raw markdown) |
+| `text` | body (Slack is pre-cleaned; Mattermost and GitHub keep raw markdown) |
 | `ts_ms` | epoch **milliseconds**, UTC → `epoch_ms(ts_ms)` in DuckDB |
 | `author_name`, `author_id` | display name / stable id |
 | `channel_name`, `channel_id` | for a DM, `channel_name` is the other person |
 | `channel_kind` | `public` \| `private` \| `direct` \| `group` |
-| `account`, `provider` | account name; `mattermost` \| `slack` |
+| `account`, `provider` | account name; `mattermost` \| `slack` \| `github` |
 | `thread_id` | the thread's root id; **equals `id` for a root / standalone message** |
 | `reply_count`, `is_mention`, `is_own`, `edited` | |
 | `is_unread` | **see caveat below** |
 | `permalink` | web URL to the message |
 | `reactions_json` | JSON string, `{emoji_name: count}` |
 | `raw_json` | provider payload — ignore |
+
+**GitHub (`provider = 'github'`):** each repo is a channel (`channel_name` =
+`owner/repo`), each issue is a thread — the issue is the root (`id = thread_id`,
+`text` starts with the title line, then the body) and its comments are replies.
+To list issues: `WHERE provider = 'github' AND id = thread_id`.
 
 ## `is_unread` caveat
 
@@ -128,7 +133,7 @@ Same query, no channel/account filter. If it's a lot, summarize grouped by
 2. Find matching threads:
    `SELECT DISTINCT account, thread_id, channel_name FROM read_parquet('{root}/*/*.parquet') WHERE text ILIKE '%TRL%'`
 3. Pull each full thread in order:
-   `SELECT author_name, strftime(epoch_ms(ts_ms),'%Y-%m-%d %H:%M') at, text, permalink
+   `SELECT author_name, strftime(epoch_ms(ts_ms),'%Y-%m-%d %H:%M') AS at, text, permalink
     FROM read_parquet('{root}/*/*.parquet')
     WHERE thread_id = '<id>' AND account = '<account>' ORDER BY ts_ms`
 4. Answer: quote the message(s) where the framework was chosen, with the date and
